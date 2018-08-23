@@ -35,6 +35,7 @@
   required: *ignorepaths
 .travis.yml:
   ruby_versions:
+    - 2.1.9
     - 2.4.4
   global_env:
     - BEAKER_PUPPET_COLLECTION=puppet5 PUPPET_GEM_VERSION="~> 5.0"
@@ -50,8 +51,10 @@
     script: bundle exec rake beaker
   includes:
     - env: CHECK="syntax lint metadata_lint check:symlinks check:git_ignore check:dot_underscore check:test_file rubocop"
-    - env: CHECK=parallel_spec
-    - env: PUPPET_GEM_VERSION="~> 4.0" CHECK=parallel_spec
+    - env: CHECK="pkg:check_version pkg:compare_latest_tag pkg:create_tag_changelog"
+    - env: PUPPET_GEM_VERSION="~> 5.0" CHECK=parallel_spec
+    - env: PUPPET_GEM_VERSION="~> 5.3" CHECK=parallel_spec
+    - env: PUPPET_GEM_VERSION="~> 4.10" CHECK=parallel_spec
       rvm: 2.1.9
   deploy: true
   user: 'puppet'
@@ -60,28 +63,30 @@
     - /^v\d/
 .yardopts:
   markup: markdown
-appveyor.yml:
-  appveyor_bundle_install: "bundle install --jobs 4 --retry 2 --without system_tests"
-  matrix:
-    - RUBY_VERSION: 24-x64
-      CHECK: "syntax lint metadata_lint check:symlinks check:git_ignore check:dot_underscore check:test_file rubocop"
-    - PUPPET_GEM_VERSION: ~> 4.0
-      RUBY_VERSION: 21
-      CHECK: parallel_spec
-    - PUPPET_GEM_VERSION: ~> 4.0
-      RUBY_VERSION: 21-x64
-      CHECK: parallel_spec
-    - PUPPET_GEM_VERSION: ~> 5.0
-      RUBY_VERSION: 24
-      CHECK: parallel_spec
-    - PUPPET_GEM_VERSION: ~> 5.0
-      RUBY_VERSION: 24-x64
-      CHECK: parallel_spec
-  test_script:
-    - bundle exec rake %CHECK%
+# appveyor.yml:
+#   appveyor_bundle_install: "bundle install --jobs 4 --retry 2 --without system_tests"
+#   matrix:
+#     - RUBY_VERSION: 24-x64
+#       CHECK: "syntax lint metadata_lint check:symlinks check:git_ignore check:dot_underscore check:test_file rubocop"
+#     - PUPPET_GEM_VERSION: ~> 4.0
+#       RUBY_VERSION: 21
+#       CHECK: parallel_spec
+#     - PUPPET_GEM_VERSION: ~> 4.0
+#       RUBY_VERSION: 21-x64
+#       CHECK: parallel_spec
+#     - PUPPET_GEM_VERSION: ~> 5.0
+#       RUBY_VERSION: 24
+#       CHECK: parallel_spec
+#     - PUPPET_GEM_VERSION: ~> 5.0
+#       RUBY_VERSION: 24-x64
+#       CHECK: parallel_spec
+#   test_script:
+#     - bundle exec rake %CHECK%
 Rakefile:
   default_disabled_lint_checks:
     - 'relative'
+    - 'no-140chars-check'
+    - 'no-trailing_comma-check'
   extras: []
 .rubocop.yml:
   selected_profile: strict
@@ -531,25 +536,30 @@ Gemfile:
           - mswin
           - mingw
           - x64_mingw
-    # ':system_tests':
-    #   - gem: 'puppet-module-posix-system-r#{minor_version}'
-    #     platforms: ruby
-    #   - gem: 'puppet-module-win-system-r#{minor_version}'
-    #     platforms:
-    #       - mswin
-    #       - mingw
-    #       - x64_mingw
-    #   - gem: beaker
-    #     version: '~> 3.13'
-    #     from_env: BEAKER_VERSION
-    #   - gem: beaker-abs
-    #     from_env: BEAKER_ABS_VERSION
-    #     version: '~> 0.1'
-    #   - gem: beaker-pe
-    #   - gem: beaker-hostgenerator
-    #     from_env: BEAKER_HOSTGENERATOR_VERSION
-    #   - gem: beaker-rspec
-    #     from_env: BEAKER_RSPEC_VERSION
+      - gem: 'simp-rake-helpers'
+        platforms: ruby
+      - gem: 'pry'
+        platforms: ruby
+  optional:
+    ':system_tests':
+      - gem: 'puppet-module-posix-system-r#{minor_version}'
+        platforms: ruby
+      - gem: 'puppet-module-win-system-r#{minor_version}'
+        platforms:
+          - mswin
+          - mingw
+          - x64_mingw
+      - gem: beaker
+        version: '~> 3.13'
+        from_env: BEAKER_VERSION
+      - gem: beaker-abs
+        from_env: BEAKER_ABS_VERSION
+        version: '~> 0.1'
+      - gem: beaker-pe
+      - gem: beaker-hostgenerator
+        from_env: BEAKER_HOSTGENERATOR_VERSION
+      - gem: beaker-rspec
+        from_env: BEAKER_RSPEC_VERSION
 .gitlab-ci.yml:
   defaults:
     cache:
@@ -560,13 +570,14 @@ Gemfile:
       '2.1.9':
         checks:
           - parallel_spec
-        puppet_version: '~> 4.0'
+        puppet_version: '~> 4.10'
       '2.4.4':
         checks:
           - 'syntax lint metadata_lint check:symlinks check:git_ignore check:dot_underscore check:test_file rubocop'
+          - 'pkg:check_version pkg:compare_latest_tag pkg:create_tag_changelog'
           - parallel_spec
         puppet_version: '~> 5.5'
-    # beaker: true
+    beaker: true
 spec/default_facts.yml:
   concat_basedir: "/tmp"
   ipaddress: "172.16.254.254"
@@ -574,3 +585,4 @@ spec/default_facts.yml:
   macaddress: "AA:AA:AA:AA:AA:AA"
 spec/spec_helper.rb:
   strict_level: ":warning"
+  extra_facts: {}
