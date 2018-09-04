@@ -563,21 +563,39 @@ Gemfile:
 .gitlab-ci.yml:
   defaults:
     cache:
+      untracked: true
+      key: "${CI_PROJECT_NAMESPACE}__bundler"
       paths:
-        - 'vendor/bundle'
-    bundler_args: '--without system_tests --path vendor/bundle --jobs $(nproc)'
-    ruby_versions:
-      '2.1.9':
-        checks:
-          - parallel_spec
+        - '.vendor'
+        - 'vendor'
+    before_script:
+      - 'echo Files in cache: $(find .vendor | wc -l) || :'
+      - 'export GEM_HOME=.vendor/gem_install'
+      - 'export BUNDLE_CACHE_PATH=.vendor/bundler'
+      - 'declare GEM_BUNDLER_VER=(-v ''~> ${BUNDLER_VERSION:-1.16.0}'')'
+      - declare GEM_INSTALL=(gem install --no-document)
+      - declare BUNDLER_INSTALL=(bundle install --no-binstubs --jobs $(nproc) --path=.vendor "${FLAGS[@]}")
+      - gem list -ie "${GEM_BUNDLE_VER[@]}" --silent bundler || "${GEM_INSTALL[@]}" --local "${GEM_BUNDLE_VER[@]}" bundler || "${GEM_INSTALL[@]}" "${GEM_BUNDLE_VER[@]}" bundler
+      - 'rm -rf pkg/ || :'
+      - bundle check || rm -f Gemfile.lock && ("${BUNDLER_INSTALL[@]}" --local || "${BUNDLER_INSTALL[@]}")
+    validation_checks:
+      - 'syntax lint metadata_lint check:symlinks check:git_ignore check:dot_underscore check:test_file rubocop'
+      - 'pkg:check_version pkg:compare_latest_tag pkg:create_tag_changelog'
+    spec_checks:
+      - spec
+    puppet_versions:
+      simp-6.0.0:
+        puppet_version: '~> 4.8'
+        ruby_version: 2.1.9
+      2016.5:
         puppet_version: '~> 4.10'
-      '2.4.4':
-        checks:
-          - 'syntax lint metadata_lint check:symlinks check:git_ignore check:dot_underscore check:test_file rubocop'
-          - 'pkg:check_version pkg:compare_latest_tag pkg:create_tag_changelog'
-          - parallel_spec
+        ruby_version: 2.1.9
+      2017.3:
+        puppet_version: '~> 5.3'
+        ruby_version: 2.4.4
+      2018.1:
         puppet_version: '~> 5.5'
-    beaker: true
+        ruby_version: 2.4.4
 spec/default_facts.yml:
   concat_basedir: "/tmp"
   ipaddress: "172.16.254.254"
