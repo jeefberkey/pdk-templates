@@ -598,3 +598,6 @@ spec/default_facts.yml:
 spec/spec_helper.rb:
   strict_level: ":warning"
   extra_facts: {}
+  # spec_overrides:
+  # - require 'simp/rspec-puppet-facts'
+  # - include Simp::RspecPuppetFacts
