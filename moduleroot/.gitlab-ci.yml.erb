@@ -1,48 +1,69 @@
-<% require 'yaml' -%>
-# The testing matrix considers ruby/puppet versions supported by SIMP and PE:
+<% require 'yaml'
+if @configs['override'] && @configs.has_key?('custom')
+  configs = @configs['custom']
+elsif @configs['defaults'] && !@configs.has_key?('custom')
+  configs = @configs['defaults']
+else
+  require 'deep_merge/core'
+  defaults = @configs['defaults'].dup
+  configs = DeepMerge::deep_merge!(defaults, @configs['custom'])
+end
+# yaml print, without trailing whitespace and leading ---
+def yp(obj,indent=0)
+  case obj
+  when Hash
+    obj.map { |k,v| ' '*indent + "#{k}" + ': ' + "#{v}" }.join("\n")
+  when Array
+    obj.map { |v| ' '*indent + "- #{v}" }.join("\n")
+  end
+end
+-%>
+# The testing matrix considers Ruby/Puppet versions supported by SIMP and PE:
 #
 # https://puppet.com/docs/pe/2018.1/component_versions_in_recent_pe_releases.html
 # https://puppet.com/misc/puppet-enterprise-lifecycle
 # ------------------------------------------------------------------------------
-#  release    pup   ruby      eol
+#  release    pup   ruby   eol
 # SIMP6.0.0   4.8   2.1.9  TBD
 # PE 2016.5   4.10  2.1.9  2018-12-31
 # PE 2017.3   5.3   2.4.4  2018-12-31
-# PE 2018.1   5.5   2.4.4  2020-05  (LTS)
+# PE 2018.1   5.5   2.4.4  2020-05 (LTS)
 ---
 stages:
   - validation
   - unit
   - acceptance
 
-<% @configs['before_scripts'].to_yaml %>
+before_script:
+<%= yp(configs['before_script']) %>
 
-<% @configs['puppet_versions'].each do |version,data| -%>
-<% version -%>-validation:
+<% configs['puppet_versions'].each do |version,data| -%>
+<%= version %>-validation:
   stage: validation
   tags:
     - docker
-  image: ruby:<% data['ruby_version'].split('.')[0..1].join('.') -%>
+  image: ruby:<%= data['ruby_version'].split('.')[0..1].join('.') %>
   variables:
-    PUPPET_VERSION: "<% data['puppet_version'] -%>"
-  <% @config['cache'] -%>
-  <% @config['before_script'] -%>
+    PUPPET_VERSION: "<%= data['puppet_version'] %>"
+  cache:
+  <%= yp(configs['cache'],2) %>
+  <%= yp(configs['before_script'],2) %>
   script:
-  <% data['validation_checks'].map(&:split).flatten.each do |check| -%>
-  - bundle exec <% check -%>
+  <% (data['validation_checks']||[]).map(&:split).flatten.each do |check| -%>
+  - bundle exec <%= check %>
   <% end -%>
-<% version -%>-unit:
+<%= version %>-unit:
   stage: unit
   tags:
     - docker
-  image: ruby:<% data['ruby_version'].split('.')[0..1].join('.') -%>
+  image: ruby:<%= data['ruby_version'].split('.')[0..1].join('.') %>
   variables:
-    PUPPET_VERSION: "<% data['puppet_version'] -%>"
-  <% @config['cache'] -%>
-  <% @config['before_script'] -%>
+    PUPPET_VERSION: "<%= data['puppet_version'] %>"
+  <%= yp(configs['cache'],2) %>
+  <%= yp(configs['before_script'],2) %>
   script:
-  <% data['spec_checks'].map(&:split).flatten.each do |check| -%>
-  - bundle exec <% check -%>
+  <% (data['spec_checks']||[]).map(&:split).flatten.each do |check| -%>
+  - bundle exec <%= check %>
   <% end -%>
 <% end -%>
 
