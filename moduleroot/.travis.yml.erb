@@ -1,94 +1,95 @@
+<% require 'yaml'
+if @configs['override'] && @configs.has_key?('custom')
+  configs = @configs['custom']
+elsif @configs['defaults'] && !@configs.has_key?('custom')
+  configs = @configs['defaults']
+else
+  require 'deep_merge/core'
+  defaults = @configs['defaults'].dup
+  configs = DeepMerge::deep_merge!(defaults, @configs['custom'])
+end
+# yaml print, without trailing whitespace and leading ---
+def yp(obj,i=0)
+  obj.to_yaml.split("\n").map(&:rstrip)[1..-1].map{|s|' '*i+"#{s}"}.join("\n")
+end
+-%>
+# This file is managed by PDK. Do not edit manually.
+#
+# The testing matrix considers Ruby/Puppet versions supported by SIMP and PE:
+#
+# https://puppet.com/docs/pe/2018.1/component_versions_in_recent_pe_releases.html
+# https://puppet.com/misc/puppet-enterprise-lifecycle
+# ------------------------------------------------------------------------------
+#  release    pup   ruby   eol
+# SIMP6.0.0   4.8   2.1.9  TBD
+# PE 2016.5   4.10  2.1.9  2018-12-31
+# PE 2017.3   5.3   2.4.4  2018-12-31
+# PE 2018.1   5.5   2.4.4  2020-05 (LTS)
 ---
-sudo: false
-dist: trusty
 language: ruby
 cache: bundler
-<% if !@configs.nil? && @configs.has_key?('addons') -%>
-addons:
-<%   @configs['addons'].each do |addon, params| -%>
-  <%= addon %>:
-<%     params.each do |param_name, param_value| -%>
-    <%= param_name %>:<%= param_value.is_a?(String) ? " #{param_value}" : "" %>
-<%       if param_value.is_a?(Array) -%>
-<%         param_value.each do |r| -%>
-      - <%= r %>
-<%         end -%>
-<%       end -%>
-<%     end -%>
-<%   end -%>
-<% end -%>
-before_install:
-  - bundle -v
-  - rm -f Gemfile.lock
-  - gem update --system
-  - gem --version
-  - bundle -v
-script:
-<% if @configs['simplecov'] -%>
-  - 'SIMPLECOV=yes bundle exec rake $CHECK'
-<% else -%>
-  - 'bundle exec rake $CHECK'
-<% end -%>
-bundler_args: <%= @configs['bundler_args'] %>
-rvm:
-<% @configs['ruby_versions'].each do |ruby_version| -%>
-  - <%= ruby_version %>
-<% end -%>
-<% if @configs.has_key?('env') || @configs.has_key?('global_env') -%>
-env:
-<%   if @configs.has_key?('global_env') -%>
-  global:
-<%     @configs['global_env'].each do |env| -%>
-    - <%= env %>
-<%     end -%>
-<%   end -%>
-<%   if @configs.has_key?('env') -%>
-  matrix:
-<%     @configs['env'].each do |env| -%>
-    - <%= env %>
-<%     end -%>
-<%   end -%>
-<% end -%>
-matrix:
-  fast_finish: true
-  include:
-<% (@configs['docker_sets'] || []).each do |set| -%>
-<%   job = @configs['docker_defaults'].merge(set['options'] || {}) -%>
-    -
-<%   job.keys.sort.each do |key| -%>
-      <%= key %>: <%= job[key].gsub(/@@SET@@/, set['set']).gsub(/@@TESTMODE@@/, set.fetch('testmode', 'apply')) %>
-<%   end -%>
-<% end -%>
-<% (@configs['includes'] - (@configs['remove_includes'] || []) + (@configs['extras'] || [])).each do |job| -%>
-    -
-<%   job.keys.sort.each do |key| -%>
-      <%= key %>: <%= job[key] %>
-<%   end -%>
-<% end -%>
-<% if @configs['allow_failures'] -%>
-  allow_failures:
-<%   @configs['allow_failures'].each do |job| -%>
-    -
-<%     job.keys.sort.each do |key| -%>
-      <%= key %>: <%= job[key] %>
-<%     end -%>
-<%   end -%>
-<% end -%>
-branches:
-<% if ((@configs['branches'] || []) - (@configs['remove_branches'] || [])).any? -%>
-  only:
-<%   (@configs['branches'] - (@configs['remove_branches'] || [])).each do |branch| -%>
-    - <%= branch %>
-<%   end -%>
-<% end -%>
-<% if @configs['branches_except'] -%>
-  except:
-<%   @configs['branches_except'].each do |branch| -%>
-    - <%= branch %>
-<%   end -%>
-<% end -%>
+sudo: false
+
+bundler_args: <%= configs['bundler_args'] %>
+
 notifications:
   email: false
+
+addons:
+  apt:
+    packages:
+      - rpm
+
+before_install:
+<% configs['before_install'].each do |task| -%>
+- <%= task %>
+<% end -%>
+
+env:
+  global:
+<% configs['global_env'].each do |env| -%>
+  - <%= env %>
+<% end -%>
+
+jobs:
+  include:
+  - stage: check
+    rvm: 2.4.4
+    env: PUPPET_VERSION="~> 5"
+    script:
+<% configs['validation_checks'].map(&:split).flatten.each do |check| -%>
+    - bundle exec <%= check %>
+<% end -%>
+
+
+<% configs['puppet_versions'].each do |version,data| -%>
+  - stage: spec
+    rvm: <%= data['ruby_version'] %>
+    env: PUPPET_VERSION="<%= data['puppet_version'] %>"
+    script:
+<%   configs['spec_checks'].map(&:split).flatten.each do |check| -%>
+    - bundle exec <%= check %>
+<%   end -%>
+
+<% end -%>
+
+  - stage: deploy
+    rvm: 2.4.4
+    script:
+    - true
+    before_deploy:
+<% configs['before_deploy'].each do |task| -%>
+    - <%= task %>
+<% end -%>
+    deploy:
+<% configs['deploy'].each do |provider,data| -%>
+    - provider: <%= provider %>
+<%=  yp(data,6) %>
+      on:
+<%=  yp(configs['deploy_condition'],8) %>
+<% end -%>
+
+
 <% if @configs['deploy'] -%>
 deploy:
   provider: puppetforge

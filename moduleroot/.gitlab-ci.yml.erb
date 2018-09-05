@@ -9,15 +9,12 @@ else
   configs = DeepMerge::deep_merge!(defaults, @configs['custom'])
 end
 # yaml print, without trailing whitespace and leading ---
-def yp(obj,indent=0)
-  case obj
-  when Hash
-    obj.map { |k,v| ' '*indent + "#{k}" + ': ' + "#{v}" }.join("\n")
-  when Array
-    obj.map { |v| ' '*indent + "- #{v}" }.join("\n")
-  end
+def yp(obj,i=0)
+  obj.to_yaml.split("\n").map(&:rstrip)[1..-1].map{|s|' '*i+"#{s}"}.join("\n")
 end
 -%>
+# This file is managed by PDK. Do not edit manually.
+#
 # The testing matrix considers Ruby/Puppet versions supported by SIMP and PE:
 #
 # https://puppet.com/docs/pe/2018.1/component_versions_in_recent_pe_releases.html
@@ -38,6 +35,9 @@ before_script:
 <%= yp(configs['before_script']) %>
 
 <% configs['puppet_versions'].each do |version,data| -%>
+# Tests for the <%= version %> platform, using:
+#   Puppet: <%= data['puppet_version'] %>
+#   Ruby: <%= data['ruby_version'] %>
 <%= version %>-validation:
   stage: validation
   tags:
@@ -46,12 +46,11 @@ before_script:
   variables:
     PUPPET_VERSION: "<%= data['puppet_version'] %>"
   cache:
-  <%= yp(configs['cache'],2) %>
-  <%= yp(configs['before_script'],2) %>
+<%=  yp(configs['cache'],4) %>
   script:
-  <% (data['validation_checks']||[]).map(&:split).flatten.each do |check| -%>
+<%   configs['validation_checks'].map(&:split).flatten.each do |check| -%>
   - bundle exec <%= check %>
-  <% end -%>
+<%   end -%>
 <%= version %>-unit:
   stage: unit
   tags:
@@ -59,114 +58,39 @@ before_script:
   image: ruby:<%= data['ruby_version'].split('.')[0..1].join('.') %>
   variables:
     PUPPET_VERSION: "<%= data['puppet_version'] %>"
-  <%= yp(configs['cache'],2) %>
-  <%= yp(configs['before_script'],2) %>
+  cache:
+<%=  yp(configs['cache'],4) %>
   script:
-  <% (data['spec_checks']||[]).map(&:split).flatten.each do |check| -%>
+<%   configs['spec_checks'].map(&:split).flatten.each do |check| -%>
   - bundle exec <%= check %>
-  <% end -%>
-<% end -%>
+<%   end -%>
 
+<% end -%>
 
 # Acceptance tests
 # ==============================================================================
-base_apps:
+<% configs['beaker_suites'].each do |suite| -%>
+<%   configs['beaker_matrix'].each do |mat,data| -%>
+<%     nodeset = mat =~ /oel/ ? 'oel' : 'default' -%>
+<%= suite %>-<%= mat %>:
   stage: acceptance
   tags:
     - beaker
-  <<: *cache_bundler
-  <<: *setup_bundler_env
+  cache:
+<%=    yp(configs['cache'],4) %>
+<%     if data['variables'] -%>
   variables:
-    PUPPET_VERSION: '~> 4.10.0'
+    PUPPET_VERSION: "<%= data['puppet_version'] %>"
+<%=      yp(data['variables'],4) %>
+<%     end -%>
   script:
-    - bundle exec rake beaker:suites[base_apps]
+  - bundle exec rake spec_clean
+  - bundle exec 'beaker:suites[<%= suite %>,<%= nodeset %>]'
+<%     if data['only_with_SIMP_FULL_MATRIX'] == true -%>
+  only:
+    variables:
+    - $SIMP_FULL_MATRIX
+<%     end -%>
 
-default:
-  stage: acceptance
-  tags:
-    - beaker
-  <<: *cache_bundler
-  <<: *setup_bundler_env
-  variables:
-    PUPPET_VERSION: '~> 4.10.0'
-  script:
-    - bundle exec rake beaker:suites[default]
-
-default-fips:
-  stage: acceptance
-  tags:
-    - beaker
-  <<: *cache_bundler
-  <<: *setup_bundler_env
-  variables:
-    PUPPET_VERSION: '~> 4.10.0'
-    BEAKER_fips: 'yes'
-  script:
-    - bundle exec rake beaker:suites[default]
-
-default-puppet5:
-  stage: acceptance
-  tags:
-    - beaker
-  <<: *cache_bundler
-  <<: *setup_bundler_env
-  variables:
-    PUPPET_VERSION: '~> 5.3.0'
-  script:
-    - bundle exec rake beaker:suites[default,puppet5]
-  allow_failure: true
-
-no_simp_server:
-  stage: acceptance
-  tags:
-    - beaker
-  <<: *cache_bundler
-  <<: *setup_bundler_env
-  variables:
-    PUPPET_VERSION: '~> 4.10.0'
-  script:
-    - bundle exec rake beaker:suites[no_simp_server]
-
-netconsole:
-  stage: acceptance
-  tags:
-    - beaker
-  <<: *cache_bundler
-  <<: *setup_bundler_env
-  variables:
-    PUPPET_VERSION: '~> 4.10.0'
-  script:
-    - bundle exec rake beaker:suites[netconsole]
-
-one_shot_scenario:
-  stage: acceptance
-  tags:
-    - beaker
-  <<: *cache_bundler
-  <<: *setup_bundler_env
-  variables:
-    PUPPET_VERSION: '~> 4.10.0'
-  script:
-    - bundle exec rake beaker:suites[scenario_one_shot]
-
-poss_scenario:
-  stage: acceptance
-  tags:
-    - beaker
-  <<: *cache_bundler
-  <<: *setup_bundler_env
-  variables:
-    PUPPET_VERSION: '~> 4.10.0'
-  script:
-    - bundle exec rake beaker:suites[scenario_poss]
-
-remote_access_scenario:
-  stage: acceptance
-  tags:
-    - beaker
-  <<: *cache_bundler
-  <<: *setup_bundler_env
-  variables:
-    PUPPET_VERSION: '~> 4.10.0'
-  script:
-    - bundle exec rake beaker:suites[scenario_remote_access]
+<%   end -%>
+<% end -%>

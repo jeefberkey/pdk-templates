@@ -34,54 +34,48 @@
 .pdkignore:
   required: *ignorepaths
 .travis.yml:
-  ruby_versions:
-    - 2.1.9
-    - 2.4.4
-  global_env:
-    - BEAKER_PUPPET_COLLECTION=puppet5 PUPPET_GEM_VERSION="~> 5.0"
-  bundler_args: --without system_tests
-  docker_sets:
-  docker_defaults:
-    # values will replace @@SET@@ with the docker_sets' value
-    rvm: 2.4.4
-    sudo: required
-    dist: trusty
-    services: docker
-    env: PUPPET_INSTALL_TYPE=agent BEAKER_debug=true BEAKER_PUPPET_COLLECTION=puppet5 BEAKER_set=@@SET@@ BEAKER_TESTMODE=@@TESTMODE@@
-    script: bundle exec rake beaker
-  includes:
-    - env: CHECK="syntax lint metadata_lint check:symlinks check:git_ignore check:dot_underscore check:test_file rubocop"
-    - env: CHECK="pkg:check_version pkg:compare_latest_tag pkg:create_tag_changelog"
-    - env: PUPPET_GEM_VERSION="~> 5.0" CHECK=parallel_spec
-    - env: PUPPET_GEM_VERSION="~> 5.3" CHECK=parallel_spec
-    - env: PUPPET_GEM_VERSION="~> 4.10" CHECK=parallel_spec
-      rvm: 2.1.9
-  deploy: true
-  user: 'puppet'
-  branches:
-    - master
-    - /^v\d/
+  defaults:
+    bundler_args: --without development system_tests --path .vendor
+    before_install:
+      - rm -f Gemfile.lock
+    global_env:
+      - STRICT_VARIABLES=yes TRUSTED_NODE_DATA=yes
+    validation_checks:
+      - 'syntax lint metadata_lint check:symlinks check:git_ignore check:dot_underscore check:test_file rubocop'
+      - 'pkg:check_version pkg:compare_latest_tag pkg:create_tag_changelog'
+    spec_checks:
+      - spec
+    puppet_versions:
+      simp-6.0.0:
+        puppet_version: '~> 4.8'
+        ruby_version: 2.1.9
+      2016.5:
+        puppet_version: '~> 4.10'
+        ruby_version: 2.1.9
+      2017.3:
+        puppet_version: '~> 5.3'
+        ruby_version: 2.4.4
+      2018.1:
+        puppet_version: '~> 5.5'
+        ruby_version: 2.4.4
+    before_deploy:
+    - "export PUPMOD_METADATA_VERSION=`ruby -r json -e \"puts JSON.parse(File.read('metadata.json')).fetch('version')\"`"
+    - '[[ $TRAVIS_TAG =~ ^simp-${PUPMOD_METADATA_VERSION}$|^${PUPMOD_METADATA_VERSION}$ ]]'
+    deploy_condition:
+      tags: true
+      condition: '($SKIP_FORGE_PUBLISH != true)'
+    deploy:
+      releases:
+        skip_cleanup: true
+        api_key:
+          secure: ''
+      puppetforge:
+        user: simp
+        password:
+          secure: ''
+
 .yardopts:
   markup: markdown
-# appveyor.yml:
-#   appveyor_bundle_install: "bundle install --jobs 4 --retry 2 --without system_tests"
-#   matrix:
-#     - RUBY_VERSION: 24-x64
-#       CHECK: "syntax lint metadata_lint check:symlinks check:git_ignore check:dot_underscore check:test_file rubocop"
-#     - PUPPET_GEM_VERSION: ~> 4.0
-#       RUBY_VERSION: 21
-#       CHECK: parallel_spec
-#     - PUPPET_GEM_VERSION: ~> 4.0
-#       RUBY_VERSION: 21-x64
-#       CHECK: parallel_spec
-#     - PUPPET_GEM_VERSION: ~> 5.0
-#       RUBY_VERSION: 24
-#       CHECK: parallel_spec
-#     - PUPPET_GEM_VERSION: ~> 5.0
-#       RUBY_VERSION: 24-x64
-#       CHECK: parallel_spec
-#   test_script:
-#     - bundle exec rake %CHECK%
 Rakefile:
   default_disabled_lint_checks:
     - 'relative'
@@ -596,6 +590,26 @@ Gemfile:
       2018.1:
         puppet_version: '~> 5.5'
         ruby_version: 2.4.4
+    beaker_suites:
+    - default
+    beaker_matrix:
+      puppet4:
+        puppet_version: '~> 4.10'
+      puppet5:
+        puppet_version: '~> 5.3'
+        variables:
+          PUPPET_BEAKER_COLLECTION: 'puppet5'
+      fips:
+        puppet_version: '~> 5.3'
+        only_with_SIMP_FULL_MATRIX: true
+        variables:
+          BEAKER_FIPS: 'yes'
+          PUPPET_BEAKER_COLLECTION: 'puppet5'
+      oel:
+        puppet_version: '~> 5.3'
+        only_with_SIMP_FULL_MATRIX: true
+        variables:
+          PUPPET_BEAKER_COLLECTION: 'puppet5'
 spec/default_facts.yml:
   concat_basedir: "/tmp"
   ipaddress: "172.16.254.254"
