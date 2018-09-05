@@ -578,18 +578,18 @@ Gemfile:
       puppet5:
         puppet_version: '~> 5.3'
         variables:
-          PUPPET_BEAKER_COLLECTION: 'puppet5'
+          BEAKER_PUPPET_COLLECTION: 'puppet5'
       fips:
         puppet_version: '~> 5.3'
         only_with_SIMP_FULL_MATRIX: true
         variables:
           BEAKER_FIPS: 'yes'
-          PUPPET_BEAKER_COLLECTION: 'puppet5'
+          BEAKER_PUPPET_COLLECTION: 'puppet5'
       oel:
         puppet_version: '~> 5.3'
         only_with_SIMP_FULL_MATRIX: true
         variables:
-          PUPPET_BEAKER_COLLECTION: 'puppet5'
+          BEAKER_PUPPET_COLLECTION: 'puppet5'
 spec/default_facts.yml:
   concat_basedir: "/tmp"
   ipaddress: "172.16.254.254"
